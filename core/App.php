@@ -14,8 +14,8 @@ class App {
     private static function autoload(string $class): void {
         $dirs = [
             self::$basePath . '/app/Controllers/',
-            self::$basePath . '/app/Modols/',   // Models directory (note: "Modols" not "Models")
-            self::$basePath . '/config/',       // DB class
+            self::$basePath . '/app/Models/',
+            self::$basePath . '/config/',   // DB class
             self::$basePath . '/core/',
         ];
         foreach ($dirs as $dir) {

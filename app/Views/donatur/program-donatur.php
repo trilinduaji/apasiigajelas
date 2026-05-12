@@ -1,22 +1,18 @@
 <?php
-/**
- * Jelajahi Program - Donatur View
- * Menampilkan semua program aktif dari database
- */
-$allPrograms = array_values(array_filter(ProgramModel::all(), fn($p) => ($p['status'] ?? '') !== 'deleted'));
+$allPrograms = array_values(array_filter($_SESSION['programs'] ?? [], fn($p) => ($p['status'] ?? '') !== 'deleted'));
 $activePrograms = array_values(array_filter($allPrograms, fn($p) => ($p['status'] ?? '') === 'active'));
 
 $q = trim($_GET['q'] ?? '');
 $catFilt = $_GET['cat'] ?? '';
 $sort = $_GET['sort'] ?? 'urgent';
 
-$categories = array_values(array_unique(array_filter(array_map(fn($p) => $p['category'] ?? 'Lainnya', $allPrograms))));
+$categories = array_values(array_unique(array_map(fn($p) => $p['cat'] ?? 'Lainnya', $allPrograms)));
 sort($categories);
 
 $filteredPrograms = array_values(array_filter($allPrograms, function ($p) use ($q, $catFilt) {
     $name = strtolower($p['name'] ?? '');
-    $desc = strtolower($p['description'] ?? '');
-    $cat = $p['category'] ?? '';
+    $desc = strtolower($p['desc'] ?? '');
+    $cat = $p['cat'] ?? '';
     if ($q !== '' && !str_contains($name . ' ' . $desc, strtolower($q))) return false;
     if ($catFilt !== '' && $cat !== $catFilt) return false;
     return true;
@@ -29,16 +25,33 @@ usort($filteredPrograms, function ($a, $b) use ($sort) {
 });
 
 $featured = $filteredPrograms[0] ?? ($activePrograms[0] ?? ($allPrograms[0] ?? null));
-$programCards = array_slice($filteredPrograms, 0, 6);
-$urgentPrograms = array_values(array_filter($filteredPrograms, fn($p) => ($p['status'] ?? '') === 'active' && ((float)($p['pct'] ?? 0) >= 80 || stripos($p['category'] ?? '', 'darurat') !== false || stripos($p['category'] ?? '', 'bencana') !== false)));
+$programCards = array_slice($filteredPrograms, 0, 3);
+$urgentPrograms = array_values(array_filter($filteredPrograms, fn($p) => ($p['status'] ?? '') === 'active' && ((float)($p['pct'] ?? 0) >= 80 || stripos($p['cat'] ?? '', 'darurat') !== false || stripos($p['cat'] ?? '', 'bencana') !== false)));
 if (empty($urgentPrograms)) $urgentPrograms = array_slice($filteredPrograms, 0, 2);
 
-$verifiedDonations = DonationModel::verified();
-$totalCollected = ProgramModel::totalCollected();
-$totalTarget = ProgramModel::totalTarget();
+$verifiedDonations = array_values(array_filter($_SESSION['donations'] ?? [], fn($d) => ($d['status'] ?? '') === 'verified'));
+$totalCollected = array_sum(array_map(fn($p) => (float)($p['collected'] ?? 0), $activePrograms));
+$totalTarget = array_sum(array_map(fn($p) => (float)($p['target'] ?? 0), $activePrograms));
 $avgProgress = $totalTarget > 0 ? round(($totalCollected / $totalTarget) * 100, 1) : 0;
+$rankTotal = 0;
+$currentUser = current_user();
+foreach ($_SESSION['donations'] ?? [] as $donation) {
+    if (($donation['donor'] ?? '') === ($currentUser['name'] ?? '') && ($donation['status'] ?? '') === 'verified') {
+        $rankTotal += (int) str_replace('.', '', $donation['amount'] ?? '0');
+    }
+}
 
-// Helper functions
+function program_amount_juta(array $p, string $key): string {
+    $rp = ((float)($p[$key] ?? 0)) * 1000000;
+    return 'Rp ' . number_format($rp, 0, ',', '.');
+}
+
+function program_desc_short(array $p, int $limit = 86): string {
+    $text = trim($p['desc'] ?? '');
+    if ($text === '') $text = 'Program bantuan SIPEDO yang membutuhkan dukungan donatur.';
+    return strlen($text) > $limit ? substr($text, 0, $limit - 3) . '...' : $text;
+}
+
 function program_img_style(array $p): string {
     if (!empty($p['image'])) {
         return "background-image: linear-gradient(90deg, rgba(15,31,61,.76), rgba(15,31,61,.16)), url('" . e(pub($p['image'])) . "');";
@@ -58,12 +71,6 @@ function program_category_icon(string $cat): string {
         'Infrastruktur' => '🏗️',
     ];
     return $icons[$cat] ?? '💚';
-}
-
-function program_desc_short(array $p, int $limit = 86): string {
-    $text = trim($p['description'] ?? '');
-    if ($text === '') $text = 'Program bantuan SIPEDO yang membutuhkan dukungan donatur.';
-    return strlen($text) > $limit ? substr($text, 0, $limit - 3) . '...' : $text;
 }
 ?>
 
@@ -106,7 +113,7 @@ function program_desc_short(array $p, int $limit = 86): string {
 
     <section class="xp-stats-grid" aria-label="Ringkasan program">
         <article class="xp-stat-card"><strong><?= number_format(count($activePrograms), 0, ',', '.') ?></strong><span>Program Aktif</span></article>
-        <article class="xp-stat-card"><strong><?= formatRupiah($totalCollected) ?></strong><span>Dana Terkumpul</span></article>
+        <article class="xp-stat-card"><strong><?= formatJuta($totalCollected) ?></strong><span>Dana Terkumpul</span></article>
         <article class="xp-stat-card"><strong><?= count($verifiedDonations) ?></strong><span>Donasi Terverifikasi</span></article>
         <article class="xp-stat-card"><strong><?= e($avgProgress) ?>%</strong><span>Rata-rata Progress</span></article>
     </section>
@@ -126,21 +133,21 @@ function program_desc_short(array $p, int $limit = 86): string {
             <article class="xp-feature-card" style="<?= program_img_style($featured) ?>">
                 <div class="xp-feature-overlay">
                     <div class="xp-feature-badges">
-                        <span><?= e($featured['category'] ?? 'Program') ?></span>
+                        <span><?= e($featured['cat'] ?? 'Program') ?></span>
                         <?php if (($featured['status'] ?? '') === 'active'): ?><small>Berjalan</small><?php endif; ?>
                     </div>
                     <h2><?= e($featured['name']) ?></h2>
                     <p><?= e(program_desc_short($featured, 150)) ?></p>
                     <div class="xp-feature-actions">
-                        <a class="xp-primary-btn" href="index.php?route=app&page=program-detail&id=<?= e($featured['kode']) ?>">Donasi Sekarang</a>
+                        <a class="xp-primary-btn" href="index.php?route=app&page=program-detail&id=<?= e($featured['id']) ?>">Donasi Sekarang</a>
                         <div class="xp-feature-progress">
                             <strong><?= e(min(100, (float)($featured['pct'] ?? 0))) ?>% Tercapai</strong>
                             <span><i style="width:<?= e(min(100, (float)($featured['pct'] ?? 0))) ?>%"></i></span>
                         </div>
-                        <em><?= formatRupiahFull((float)$featured['collected']) ?> / <?= formatRupiahFull((float)$featured['target']) ?></em>
+                        <em><?= e(program_amount_juta($featured, 'collected')) ?> / <?= e(program_amount_juta($featured, 'target')) ?></em>
                     </div>
                 </div>
-                <?php if (empty($featured['image'])): ?><div class="xp-feature-icon"><?= e(program_category_icon($featured['category'] ?? '')) ?></div><?php endif; ?>
+                <?php if (empty($featured['image'])): ?><div class="xp-feature-icon"><?= e(program_category_icon($featured['cat'] ?? '')) ?></div><?php endif; ?>
             </article>
         </section>
 
@@ -158,20 +165,20 @@ function program_desc_short(array $p, int $limit = 86): string {
             <?php else: ?>
                 <div class="xp-program-grid">
                     <?php foreach ($programCards as $p): ?>
-                        <article class="xp-program-card" data-program-card data-name="<?= e(strtolower(($p['name'] ?? '') . ' ' . ($p['description'] ?? '') . ' ' . ($p['category'] ?? ''))) ?>" data-cat="<?= e($p['category'] ?? '') ?>">
-                            <a href="index.php?route=app&page=program-detail&id=<?= e($p['kode']) ?>" class="xp-card-media" style="<?= program_img_style($p) ?>">
-                                <span><?= e($p['category'] ?? 'Program') ?></span>
-                                <?php if (empty($p['image'])): ?><b><?= e(program_category_icon($p['category'] ?? '')) ?></b><?php endif; ?>
+                        <article class="xp-program-card" data-program-card data-name="<?= e(strtolower(($p['name'] ?? '') . ' ' . ($p['desc'] ?? '') . ' ' . ($p['cat'] ?? ''))) ?>" data-cat="<?= e($p['cat'] ?? '') ?>">
+                            <a href="index.php?route=app&page=program-detail&id=<?= e($p['id']) ?>" class="xp-card-media" style="<?= program_img_style($p) ?>">
+                                <span><?= e($p['cat'] ?? 'Program') ?></span>
+                                <?php if (empty($p['image'])): ?><b><?= e(program_category_icon($p['cat'] ?? '')) ?></b><?php endif; ?>
                             </a>
                             <div class="xp-card-body">
                                 <h3><?= e($p['name']) ?></h3>
                                 <p><?= e(program_desc_short($p, 92)) ?></p>
                                 <div class="xp-card-metrics">
-                                    <div><small>Target</small><strong><?= formatRupiah((float)($p['target'] ?? 0)) ?></strong></div>
+                                    <div><small>Target</small><strong><?= e(formatJuta((float)($p['target'] ?? 0))) ?></strong></div>
                                     <div><small>Terkumpul</small><strong><?= e($p['pct'] ?? 0) ?>%</strong></div>
                                 </div>
                                 <div class="xp-card-progress"><span style="width:<?= e(min(100, (float)($p['pct'] ?? 0))) ?>%"></span></div>
-                                <a class="xp-card-btn" href="index.php?route=app&page=program-detail&id=<?= e($p['kode']) ?>"><?= ($p['status'] ?? '') === 'active' ? 'Donasi Sekarang' : 'Lihat Detail' ?></a>
+                                <a class="xp-card-btn" href="index.php?route=app&page=program-detail&id=<?= e($p['id']) ?>"><?= ($p['status'] ?? '') === 'active' ? 'Donasi Sekarang' : 'Lihat Detail' ?></a>
                             </div>
                         </article>
                     <?php endforeach; ?>
@@ -190,9 +197,9 @@ function program_desc_short(array $p, int $limit = 86): string {
                 </div>
                 <?php foreach (array_slice($urgentPrograms, 0, 2) as $story): ?>
                     <article class="xp-story-card">
-                        <div class="xp-story-thumb" style="<?= program_img_style($story) ?>"><?php if (empty($story['image'])): ?><span><?= e(program_category_icon($story['category'] ?? '')) ?></span><?php endif; ?></div>
+                        <div class="xp-story-thumb" style="<?= program_img_style($story) ?>"><?php if (empty($story['image'])): ?><span><?= e(program_category_icon($story['cat'] ?? '')) ?></span><?php endif; ?></div>
                         <div>
-                            <small><?= e(strtoupper($story['category'] ?? 'UPDATE')) ?> · Baru saja</small>
+                            <small><?= e(strtoupper($story['cat'] ?? 'UPDATE')) ?> · Baru saja</small>
                             <h3><?= e($story['name']) ?></h3>
                             <p><?= e(program_desc_short($story, 128)) ?></p>
                         </div>
@@ -202,16 +209,27 @@ function program_desc_short(array $p, int $limit = 86): string {
 
             <aside class="xp-donor-panel">
                 <h2>Top Donors</h2>
-                <?php $topDonors = DonationModel::topDonors(3); ?>
-                <?php if (empty($topDonors)): ?>
+                <?php
+                    $ranked = [];
+                    foreach ($_SESSION['donations'] ?? [] as $d) {
+                        if (($d['status'] ?? '') !== 'verified') continue;
+                        $donor = $d['donor'] ?? 'Anonymous';
+                        if (!isset($ranked[$donor])) $ranked[$donor] = ['name' => $donor, 'init' => $d['init'] ?? 'DN', 'col' => $d['col'] ?? '#059669', 'total' => 0, 'count' => 0];
+                        $ranked[$donor]['total'] += (int) str_replace('.', '', $d['amount'] ?? '0');
+                        $ranked[$donor]['count']++;
+                    }
+                    usort($ranked, fn($a, $b) => $b['total'] <=> $a['total']);
+                    $ranked = array_slice($ranked, 0, 3);
+                ?>
+                <?php if (empty($ranked)): ?>
                     <p class="xp-muted">Belum ada donatur terverifikasi.</p>
                 <?php else: ?>
-                    <?php foreach ($topDonors as $i => $donor): ?>
+                    <?php foreach ($ranked as $i => $donor): ?>
                         <div class="xp-donor-row">
                             <strong><?= $i + 1 ?></strong>
-                            <?= avatar($donor['initials'] ?? '?', $donor['color'] ?? '#059669') ?>
-                            <div><b><?= e($donor['nama']) ?></b><small><?= e($donor['count']) ?> Donasi</small></div>
-                            <em><?= formatRupiahFull((float)$donor['total']) ?></em>
+                            <?= avatar($donor['init'], $donor['col']) ?>
+                            <div><b><?= e($donor['name']) ?></b><small><?= e($donor['count']) ?> Donasi</small></div>
+                            <em>Rp <?= number_format($donor['total'], 0, ',', '.') ?></em>
                         </div>
                     <?php endforeach; ?>
                 <?php endif; ?>

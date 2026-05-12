@@ -1,13 +1,8 @@
 <?php
 /**
  * SIPEDO - Donation Controller (versi database)
- * Disesuaikan dengan skema query.sql
  */
 class DonationController {
-    
-    /**
-     * Proses donasi dari donatur
-     */
     public function donate(): void {
         require_login();
 
@@ -24,7 +19,6 @@ class DonationController {
         $user     = current_user();
         $proofRel = '';
 
-        // Handle upload bukti transfer
         if (isset($_FILES['proof']) && $_FILES['proof']['error'] === UPLOAD_ERR_OK) {
             $ext     = strtolower(pathinfo($_FILES['proof']['name'], PATHINFO_EXTENSION));
             $allowed = ['jpg', 'jpeg', 'png', 'pdf'];
@@ -37,29 +31,28 @@ class DonationController {
             }
         }
 
-        // Buat donasi dengan struktur baru (user_id, program_id)
         DonationModel::create([
-            'user_id'    => (int) $user['id'],
-            'program_id' => (int) $program['id'],
-            'amount'     => $amount,
-            'method'     => $method,
-            'proof'      => $proofRel,
+            'donor_id'    => (int) $user['id'],
+            'donor'       => $user['name'],
+            'initials'    => $user['initials'],
+            'color'       => $user['color'],
+            'programId'   => (int) $program['id'],
+            'programName' => $program['name'],
+            'amount'      => $amount,
+            'method'      => $method,
+            'proof'       => $proofRel,
         ]);
 
-        add_log('Mengirim donasi ke program: ' . $program['name'], $program['kode']);
+        add_log('Mengirim donasi ke program: ' . $program['name'], $programKode);
         flash('Donasi berhasil dikirim. Menunggu verifikasi.', 'success');
         redirect_to(app_url('riwayat-donasi'));
     }
 
-    /**
-     * Verifikasi/tolak donasi oleh staff
-     */
     public function verify(): void {
         require_login();
 
         $donationKode = $_POST['donation_id'] ?? '';
         $action       = $_POST['action']      ?? 'verify';
-        $note         = trim($_POST['note']   ?? '');
         $status       = $action === 'verify' ? 'verified' : 'rejected';
 
         $donation = DonationModel::findByKode($donationKode);
@@ -69,7 +62,7 @@ class DonationController {
         }
 
         $user = current_user();
-        DonationModel::updateStatus((int) $donation['id'], $status, (int) $user['id'], $note);
+        DonationModel::updateStatus((int) $donation['id'], $status, (int) $user['id']);
 
         // Jika verified, update collected program
         if ($status === 'verified' && $donation['program_id']) {

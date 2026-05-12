@@ -1,7 +1,6 @@
 <?php
 /**
  * SIPEDO - Global Helper Functions (versi database)
- * Disesuaikan dengan skema query.sql
  */
 
 function e($value): string {
@@ -40,19 +39,16 @@ function show_flash(): void {
 
 /**
  * Catat log aktivitas ke database
- * Sesuai dengan tabel activity_logs: user_id, actor_name, role, description, ref
  */
-function add_log(string $desc, string $ref = ''): void {
+function add_log(string $desc, string $ref): void {
     $user = current_user();
-    $role = ucfirst(current_role() ?? 'System');
-    $actorName = $user['name'] ?? 'System';
-    
+    $role = ucfirst(current_role() ?? 'User');
     DB::run(
-        'INSERT INTO activity_logs (user_id, actor_name, role, description, ref)
+        'INSERT INTO activity_logs (actor_id, actor_name, actor_role, description, ref)
          VALUES (?, ?, ?, ?, ?)',
         [
-            $user['id'] ?? null,
-            $actorName,
+            $user['id']   ?? null,
+            $user['name'] ?? 'System',
             $role,
             $desc,
             $ref,
@@ -104,10 +100,14 @@ function asset_url(string $path): string {
     return '/public/assets/' . ltrim($path, '/');
 }
 
-/**
- * Format Rupiah dalam bentuk ringkas (Juta/Miliar)
- */
-function formatRupiah(float $rp): string {
+function formatJuta(float $juta): string {
+    if ($juta >= 1000) {
+        return 'Rp ' . number_format($juta / 1000, 1, ',', '.') . ' M';
+    }
+    return 'Rp ' . number_format($juta, 1, ',', '.') . ' Jt';
+}
+
+function formatRupiahLP(int $rp): string {
     if ($rp >= 1_000_000_000) {
         return 'Rp ' . number_format($rp / 1_000_000_000, 1, ',', '.') . ' M';
     } elseif ($rp >= 1_000_000) {
@@ -116,62 +116,12 @@ function formatRupiah(float $rp): string {
     return 'Rp ' . number_format($rp, 0, ',', '.');
 }
 
-/**
- * Format Rupiah penuh
- */
-function formatRupiahFull(float $rp): string {
+function formatRupiahFull(int $rp): string {
     return 'Rp ' . number_format($rp, 0, ',', '.');
-}
-
-/**
- * @deprecated Use formatRupiah() instead
- */
-function formatJuta(float $juta): string {
-    return formatRupiah($juta * 1_000_000);
-}
-
-/**
- * @deprecated Use formatRupiah() instead
- */
-function formatRupiahLP(int $rp): string {
-    return formatRupiah($rp);
 }
 
 function pub(string $path): string {
     if (empty($path)) return '';
     if (str_starts_with($path, 'public/') || str_starts_with($path, '/')) return $path;
     return 'public/' . $path;
-}
-
-/**
- * Format tanggal Indonesia
- */
-function formatTanggal(string $date): string {
-    $timestamp = strtotime($date);
-    if (!$timestamp) return $date;
-    
-    $bulan = [
-        1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
-        5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
-        9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
-    ];
-    
-    return date('d', $timestamp) . ' ' . $bulan[(int)date('n', $timestamp)] . ' ' . date('Y', $timestamp);
-}
-
-/**
- * Format waktu relatif
- */
-function timeAgo(string $datetime): string {
-    $timestamp = strtotime($datetime);
-    if (!$timestamp) return $datetime;
-    
-    $diff = time() - $timestamp;
-    
-    if ($diff < 60) return 'Baru saja';
-    if ($diff < 3600) return floor($diff / 60) . ' menit lalu';
-    if ($diff < 86400) return floor($diff / 3600) . ' jam lalu';
-    if ($diff < 2592000) return floor($diff / 86400) . ' hari lalu';
-    
-    return formatTanggal($datetime);
 }
