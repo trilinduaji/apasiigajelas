@@ -1,8 +1,13 @@
 <?php
 /**
  * SIPEDO - Program Controller (versi database)
+ * Disesuaikan dengan skema query.sql - target dalam Rupiah penuh
  */
 class ProgramController {
+    
+    /**
+     * Tambah program baru
+     */
     public function add(): void {
         require_login();
 
@@ -35,7 +40,7 @@ class ProgramController {
         ProgramModel::create([
             'name'        => $name,
             'category'    => $category,
-            'target'      => $target,
+            'target'      => $target,  // dalam Rupiah penuh
             'deadline'    => $deadline,
             'status'      => $status,
             'image'       => $imageRel,
@@ -47,6 +52,9 @@ class ProgramController {
         redirect_to(app_url('program-staff'));
     }
 
+    /**
+     * Edit program
+     */
     public function edit(): void {
         require_login();
 
@@ -76,12 +84,24 @@ class ProgramController {
             }
         }
 
-        ProgramModel::update((int) $program['id'], compact('name','category','target','deadline','status','description','imageRel') + ['image' => $imageRel]);
+        ProgramModel::update((int) $program['id'], [
+            'name'        => $name,
+            'category'    => $category,
+            'target'      => $target,  // dalam Rupiah penuh
+            'deadline'    => $deadline,
+            'status'      => $status,
+            'description' => $description,
+            'image'       => $imageRel,
+        ]);
+
         add_log('Mengedit program: ' . $name, $kode);
         flash('Program berhasil diperbarui.', 'success');
         redirect_to(app_url('program-staff'));
     }
 
+    /**
+     * Tutup program
+     */
     public function close(): void {
         require_login();
         $kode = $_POST['id'] ?? '';
@@ -94,6 +114,9 @@ class ProgramController {
         redirect_to(app_url('program-staff'));
     }
 
+    /**
+     * Hapus program (soft delete)
+     */
     public function delete(): void {
         require_login();
         $kode = $_POST['id'] ?? '';

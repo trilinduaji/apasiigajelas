@@ -1,52 +1,40 @@
 <?php
+/**
+ * Dashboard Donatur - Donatur View
+ * Menampilkan ringkasan donasi dan program aktif dari database
+ */
 $user = current_user();
-$programs = array_values(array_filter($_SESSION['programs'], fn($p) => ($p['status'] ?? '') === 'active'));
-$myDonations = array_values(array_filter($_SESSION['donations'], fn($d) => $d['donor'] === $user['name']));
+$programs = ProgramModel::active();
+$myDonations = DonationModel::byUserId((int)$user['id']);
 
+// Hitung statistik donasi saya
 $totalDonation = 0;
 $supportedPrograms = [];
 foreach ($myDonations as $donation) {
-    $totalDonation += (int) str_replace('.', '', $donation['amount']);
-    $supportedPrograms[$donation['progId']] = true;
-}
-
-$allDonorTotals = [];
-foreach ($_SESSION['donations'] as $donation) {
-    $amount = (int) str_replace('.', '', $donation['amount']);
-    if (!isset($allDonorTotals[$donation['donor']])) {
-        $allDonorTotals[$donation['donor']] = [
-            'name' => $donation['donor'],
-            'init' => $donation['init'],
-            'col' => $donation['col'],
-            'total' => 0,
-        ];
+    if ($donation['status'] === 'verified') {
+        $totalDonation += (float) $donation['amount'];
     }
-    $allDonorTotals[$donation['donor']]['total'] += $amount;
+    $supportedPrograms[$donation['program_id']] = true;
 }
-usort($allDonorTotals, fn($a, $b) => $b['total'] <=> $a['total']);
 
-$myRank = '—';
-foreach ($allDonorTotals as $idx => $donor) {
-    if ($donor['name'] === $user['name']) {
+// Top donatur
+$topDonors = DonationModel::topDonors(10);
+
+// Hitung ranking saya
+$myRank = '-';
+foreach ($topDonors as $idx => $donor) {
+    if ($donor['nama'] === $user['name']) {
         $myRank = '#' . ($idx + 1);
         break;
     }
 }
 
-$totalCollected = array_sum(array_map(fn($p) => (float) $p['collected'], $_SESSION['programs']));
-$totalDonors = count(array_unique(array_map(fn($d) => $d['donor'], $_SESSION['donations'])));
-$categories = array_values(array_unique(array_map(fn($p) => $p['cat'], $programs)));
+// Statistik global
+$totalCollected = ProgramModel::totalCollected();
+$totalDonors = DonationModel::uniqueDonors();
+$categories = array_values(array_unique(array_filter(array_map(fn($p) => $p['category'], $programs))));
 
-function rupiah_dashboard($value) {
-    return 'Rp ' . number_format((float) $value, 0, ',', '.');
-}
-
-function rupiah_short_dashboard($value) {
-    if ($value >= 1000000) return 'Rp ' . rtrim(rtrim(number_format($value / 1000000, 1, ',', '.'), '0'), ',') . 'Jt';
-    if ($value >= 1000) return 'Rp ' . rtrim(rtrim(number_format($value / 1000, 1, ',', '.'), '0'), ',') . 'K';
-    return 'Rp ' . number_format($value, 0, ',', '.');
-}
-
+// Helper functions
 function program_icon_dashboard($category) {
     $icons = [
         'Pendidikan' => '📚',
@@ -95,7 +83,7 @@ function program_gradient_dashboard($idx) {
                 <span>Donatur</span>
             </div>
             <div class="dl-hero-stat">
-                <strong><?= e(number_format($totalCollected, 1, ',', '.')) ?>Jt</strong>
+                <strong><?= formatRupiah($totalCollected) ?></strong>
                 <span>Dana Terkumpul</span>
             </div>
         </div>
@@ -119,35 +107,38 @@ function program_gradient_dashboard($idx) {
             </div>
 
             <div class="dl-program-grid" id="programGrid">
+                <?php if (empty($programs)): ?>
+                    <p class="muted">Belum ada program aktif saat ini.</p>
+                <?php endif; ?>
                 <?php foreach (array_slice($programs, 0, 6) as $idx => $p): ?>
                     <?php
-                        $raised = ((float) $p['collected']) * 1000000;
-                        $target = ((float) $p['target']) * 1000000;
-                        $isUrgent = $p['pct'] >= 90 || stripos($p['cat'], 'darurat') !== false || stripos($p['cat'], 'bencana') !== false;
+                        $raised = (float) $p['collected'];
+                        $target = (float) $p['target'];
+                        $isUrgent = $p['pct'] >= 90 || stripos($p['category'], 'darurat') !== false || stripos($p['category'], 'bencana') !== false;
                     ?>
-                    <a class="dl-program-card" href="index.php?route=app&page=program-detail&id=<?= e($p['id']) ?>" data-title="<?= e(strtolower($p['name'])) ?>" data-category="<?= e($p['cat']) ?>">
-                        <div class="dl-card-image" style="background: <?= !empty($p['image']) ? 'url(\'' . e($p['image']) . '\') center/cover' : e(program_gradient_dashboard($idx)) ?>;">
+                    <a class="dl-program-card" href="index.php?route=app&page=program-detail&id=<?= e($p['kode']) ?>" data-title="<?= e(strtolower($p['name'])) ?>" data-category="<?= e($p['category']) ?>">
+                        <div class="dl-card-image" style="background: <?= !empty($p['image']) ? 'url(\'' . e(pub($p['image'])) . '\') center/cover' : e(program_gradient_dashboard($idx)) ?>;">
                             <?php if (empty($p['image'])): ?>
-                                <span class="dl-card-emoji"><?= e(program_icon_dashboard($p['cat'])) ?></span>
+                                <span class="dl-card-emoji"><?= e(program_icon_dashboard($p['category'])) ?></span>
                             <?php endif; ?>
-                            <span class="dl-card-category"><?= e($p['cat']) ?></span>
-                            <?php if ($isUrgent): ?><span class="dl-card-urgent">⚡ Mendesak</span><?php endif; ?>
+                            <span class="dl-card-category"><?= e($p['category']) ?></span>
+                            <?php if ($isUrgent): ?><span class="dl-card-urgent">Mendesak</span><?php endif; ?>
                         </div>
                         <div class="dl-card-body">
                             <h3><?= e($p['name']) ?></h3>
-                            <p class="dl-card-desc"><?= e($p['desc'] ?: 'Program ' . strtolower($p['cat']) . ' dengan deadline ' . $p['deadline'] . '. Bantu program ini mencapai target donasi.') ?></p>
+                            <p class="dl-card-desc"><?= e($p['description'] ?: 'Program ' . strtolower($p['category']) . ' dengan deadline ' . formatTanggal($p['deadline']) . '. Bantu program ini mencapai target donasi.') ?></p>
                             <div class="dl-progress-meta">
-                                <strong><?= e(rupiah_dashboard($raised)) ?></strong>
+                                <strong><?= formatRupiahFull($raised) ?></strong>
                                 <span><?= e($p['pct']) ?>%</span>
                             </div>
                             <div class="dl-progress-track"><span style="width: <?= e(min(100, $p['pct'])) ?>%"></span></div>
-                            <p class="dl-progress-goal">Target: <?= e(rupiah_dashboard($target)) ?> · Deadline <?= e($p['deadline']) ?></p>
+                            <p class="dl-progress-goal">Target: <?= formatRupiahFull($target) ?> · Deadline <?= e(formatTanggal($p['deadline'])) ?></p>
                             <span class="dl-detail-cta">Lihat Detail &amp; Donasi →</span>
                         </div>
                     </a>
                 <?php endforeach; ?>
             </div>
-            <p class="dl-empty-state" id="emptyProgramState">Program tidak ditemukan. Coba kata kunci atau kategori lain.</p>
+            <p class="dl-empty-state" id="emptyProgramState" style="display:none;">Program tidak ditemukan. Coba kata kunci atau kategori lain.</p>
         </div>
 
         <aside class="dl-side-column">
@@ -160,7 +151,7 @@ function program_gradient_dashboard($idx) {
                     </div>
                 </div>
                 <div class="dl-quick-stats">
-                    <div><strong><?= e(rupiah_short_dashboard($totalDonation)) ?></strong><span>Total Donasi</span></div>
+                    <div><strong><?= formatRupiah($totalDonation) ?></strong><span>Total Donasi</span></div>
                     <div><strong><?= count($myDonations) ?></strong><span>Kali Transaksi</span></div>
                     <div><strong><?= count($supportedPrograms) ?></strong><span>Program Didukung</span></div>
                     <div><strong><?= e($myRank) ?></strong><span>Peringkat Donatur</span></div>
@@ -176,13 +167,16 @@ function program_gradient_dashboard($idx) {
                     </div>
                 </div>
                 <div class="dl-leaderboard">
-                    <?php foreach (array_slice($allDonorTotals, 0, 5) as $idx => $donor): ?>
-                        <div class="dl-rank-item <?= $donor['name'] === $user['name'] ? 'is-current' : '' ?>">
-                            <b><?= $idx === 0 ? '🥇' : ($idx === 1 ? '🥈' : ($idx === 2 ? '🥉' : $idx + 1)) ?></b>
-                            <?= avatar($donor['init'], $donor['col']) ?>
+                    <?php if (empty($topDonors)): ?>
+                        <p class="muted">Belum ada data donatur.</p>
+                    <?php endif; ?>
+                    <?php foreach (array_slice($topDonors, 0, 5) as $idx => $donor): ?>
+                        <div class="dl-rank-item <?= $donor['nama'] === $user['name'] ? 'is-current' : '' ?>">
+                            <b><?= $idx === 0 ? '1' : ($idx === 1 ? '2' : ($idx === 2 ? '3' : $idx + 1)) ?></b>
+                            <?= avatar($donor['initials'] ?? '?', $donor['color'] ?? '#059669') ?>
                             <div>
-                                <strong><?= e($donor['name']) ?><?= $donor['name'] === $user['name'] ? ' (Anda)' : '' ?></strong>
-                                <span><?= e(rupiah_dashboard($donor['total'])) ?></span>
+                                <strong><?= e($donor['nama']) ?><?= $donor['nama'] === $user['name'] ? ' (Anda)' : '' ?></strong>
+                                <span><?= formatRupiahFull((float)$donor['total']) ?></span>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -244,4 +238,3 @@ function program_gradient_dashboard($idx) {
     });
 })();
 </script>
-

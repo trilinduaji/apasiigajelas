@@ -199,7 +199,7 @@
                 <?php foreach ($displayPrograms as $program):
                     $pct     = (int) min($program['pct'], 100);
                     $is_urgent = ($pct >= 90 && $program['status'] === 'active');
-                    $terkumpul_rp = (float)$program['collected'] * 1_000_000;
+                    $terkumpul_rp = (float)$program['collected'];
                     $target_rp    = (float)$program['target']    * 1_000_000;
                 ?>
 
@@ -225,7 +225,7 @@
                         <?php endif; ?>
 
                         <span class="program-card__category-badge">
-                            <?= e($program['cat'] ?? 'Program') ?>
+                            <?= e($program['category'] ?? 'Program') ?>
                         </span>
 
                         <?php if ($is_urgent): ?>

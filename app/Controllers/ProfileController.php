@@ -1,6 +1,7 @@
 <?php
 /**
  * SIPEDO - Profile Controller (versi database)
+ * Disesuaikan dengan skema query.sql
  */
 class ProfileController {
     public function update(): void {
@@ -8,37 +9,38 @@ class ProfileController {
 
         $user     = current_user();
         $userId   = (int) $user['id'];
-        $name     = trim($_POST['name'] ?? '');
-        $action   = $_POST['action'] ?? 'profile';
+        $action   = $_POST['action'] ?? 'update_profile';
 
-        if ($action === 'password') {
-            $current  = $_POST['current_password']  ?? '';
-            $new      = $_POST['new_password']       ?? '';
-            $confirm  = $_POST['confirm_password']   ?? '';
+        // Handle ganti password
+        if ($action === 'change_password') {
+            $oldPass = $_POST['old_password'] ?? '';
+            $newPass = $_POST['new_password'] ?? '';
 
-            if (!UserModel::verifyPassword($userId, $current)) {
+            if (!UserModel::verifyPassword($userId, $oldPass)) {
                 flash('Password lama salah.', 'error');
-            } elseif ($new !== $confirm) {
-                flash('Konfirmasi password tidak cocok.', 'error');
-            } elseif (strlen($new) < 6) {
-                flash('Password minimal 6 karakter.', 'error');
+            } elseif (strlen($newPass) < 3) {
+                flash('Password minimal 3 karakter.', 'error');
             } else {
-                UserModel::changePassword($userId, $new);
+                UserModel::changePassword($userId, $newPass);
                 flash('Password berhasil diubah.', 'success');
                 add_log('Mengubah password', '-');
             }
 
             redirect_to(app_url('profil-' . current_role()));
+            return;
         }
 
-        // Update profil + foto
+        // Handle update profil
+        $name = trim($_POST['name'] ?? '');
         $photoRel = '';
+
+        // Handle upload foto
         if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
             $ext      = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
             $allowed  = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
             if (in_array($ext, $allowed, true)) {
-                $filename = 'avatar-' . preg_replace('/[^a-z0-9]/', '', strtolower($user['name'] ?? 'user'))
-                          . '-' . date('YmdHis') . '.' . $ext;
+                $safeEmail = preg_replace('/[^a-z0-9]/', '', strtolower($user['email'] ?? 'user'));
+                $filename = 'avatar-' . $safeEmail . '-' . date('YmdHis') . '.' . $ext;
                 $dest     = BASE_PATH . '/public/assets/uploads/avatars/' . $filename;
                 if (move_uploaded_file($_FILES['photo']['tmp_name'], $dest)) {
                     $photoRel = 'assets/uploads/avatars/' . $filename;
