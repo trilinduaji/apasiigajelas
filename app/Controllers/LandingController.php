@@ -8,17 +8,16 @@ class LandingController {
             redirect_to(app_url());
         }
 
-        $programs  = ProgramModel::all();
-        $donations = DonationModel::all();
+        $programs = ProgramModel::all();
 
-        // Hanya program aktif, urutkan by persentase
+        // Hanya program aktif, urutkan by persentase tertinggi
         $active = array_filter($programs, fn($p) => $p['status'] === 'active');
         usort($active, fn($a, $b) => $b['pct'] <=> $a['pct']);
         $displayPrograms = array_slice(array_values($active), 0, 6);
 
-        // Statistik global
-        $totalCollected = array_sum(array_column($programs, 'collected'));
-        $totalTarget    = array_sum(array_column($programs, 'target'));
+        // Statistik global — kolom 'collected' & 'target' dalam Rupiah penuh
+        $totalCollected = (float) array_sum(array_column($programs, 'collected'));
+        $totalTarget    = (float) array_sum(array_column($programs, 'target'));
         $totalProgram   = count($active);
         $donaturUnik    = DonationModel::uniqueDonors();
         $verifiedCount  = count(DonationModel::verified());

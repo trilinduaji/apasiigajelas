@@ -1,6 +1,8 @@
 <?php
 /**
  * SIPEDO - Program Model (MySQL/PDO)
+ * Disesuaikan dengan schema: kolom target/collected dalam Rupiah penuh (DECIMAL 15,2),
+ * bukan target_juta/collected_juta.
  */
 class ProgramModel {
     private static array $palette = [
@@ -33,13 +35,14 @@ class ProgramModel {
         $gradient = self::$palette[$count % count(self::$palette)];
 
         DB::run(
-            'INSERT INTO programs (kode, name, category, target_juta, collected_juta, pct, deadline, status, image, description, gradient, created_by)
+            'INSERT INTO programs
+                (kode, name, category, target, collected, pct, deadline, status, image, description, gradient, created_by)
              VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?)',
             [
                 $kode,
                 $data['name'],
                 $data['category'],
-                $data['target'] / 1_000_000,
+                $data['target'],
                 $data['deadline'],
                 $data['status'],
                 $data['image'] ?? '',
@@ -52,12 +55,12 @@ class ProgramModel {
     }
 
     public static function update(int $id, array $data): bool {
-        $newTargetJuta = $data['target'] / 1_000_000;
-        $collected     = (float) DB::fetchScalar('SELECT collected_juta FROM programs WHERE id = ?', [$id]);
-        $pct           = $newTargetJuta > 0 ? round(($collected / $newTargetJuta) * 100, 1) : 0;
+        $newTarget = (float) $data['target'];
+        $collected = (float) DB::fetchScalar('SELECT collected FROM programs WHERE id = ?', [$id]);
+        $pct       = $newTarget > 0 ? round(($collected / $newTarget) * 100, 2) : 0;
 
-        $sql = 'UPDATE programs SET name=?, category=?, deadline=?, description=?, status=?, target_juta=?, pct=?';
-        $params = [$data['name'], $data['category'], $data['deadline'], $data['description'], $data['status'], $newTargetJuta, $pct];
+        $sql    = 'UPDATE programs SET name=?, category=?, deadline=?, description=?, status=?, target=?, pct=?';
+        $params = [$data['name'], $data['category'], $data['deadline'], $data['description'], $data['status'], $newTarget, $pct];
 
         if (!empty($data['image'])) {
             $sql .= ', image=?';
@@ -79,10 +82,10 @@ class ProgramModel {
     public static function addCollected(int $id, float $amountRp): void {
         DB::run(
             'UPDATE programs
-             SET collected_juta = collected_juta + ?,
-                 pct = ROUND((collected_juta + ?) / NULLIF(target_juta, 0) * 100, 1)
+             SET collected = collected + ?,
+                 pct = ROUND((collected + ?) / NULLIF(target, 0) * 100, 2)
              WHERE id = ?',
-            [$amountRp / 1_000_000, $amountRp / 1_000_000, $id]
+            [$amountRp, $amountRp, $id]
         );
     }
 }

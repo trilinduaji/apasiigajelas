@@ -1,6 +1,6 @@
 <?php
 /**
- * SIPEDO - Donation Controller (versi database)
+ * SIPEDO - Donation Controller
  */
 class DonationController {
     public function donate(): void {
@@ -32,15 +32,11 @@ class DonationController {
         }
 
         DonationModel::create([
-            'donor_id'    => (int) $user['id'],
-            'donor'       => $user['name'],
-            'initials'    => $user['initials'],
-            'color'       => $user['color'],
-            'programId'   => (int) $program['id'],
-            'programName' => $program['name'],
-            'amount'      => $amount,
-            'method'      => $method,
-            'proof'       => $proofRel,
+            'user_id'    => (int) $user['id'],
+            'program_id' => (int) $program['id'],
+            'amount'     => $amount,
+            'method'     => $method,
+            'proof'      => $proofRel,
         ]);
 
         add_log('Mengirim donasi ke program: ' . $program['name'], $programKode);
@@ -65,7 +61,7 @@ class DonationController {
         DonationModel::updateStatus((int) $donation['id'], $status, (int) $user['id']);
 
         // Jika verified, update collected program
-        if ($status === 'verified' && $donation['program_id']) {
+        if ($status === 'verified' && !empty($donation['program_id'])) {
             ProgramModel::addCollected((int) $donation['program_id'], (float) $donation['amount']);
         }
 

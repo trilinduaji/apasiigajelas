@@ -9,7 +9,7 @@ class DB {
     // ── Konfigurasi ──────────────────────────────────────
     private static string $host     = '127.0.0.1';
     private static string $port     = '3306';
-    private static string $dbname   = 'sipedo_db';
+    private static string $dbname   = 'sipedo';
     private static string $username = 'root';
     private static string $password = '';          // ganti sesuai env Anda
     private static string $charset  = 'utf8mb4';

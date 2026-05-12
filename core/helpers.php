@@ -44,7 +44,7 @@ function add_log(string $desc, string $ref): void {
     $user = current_user();
     $role = ucfirst(current_role() ?? 'User');
     DB::run(
-        'INSERT INTO activity_logs (actor_id, actor_name, actor_role, description, ref)
+        'INSERT INTO activity_logs (user_id, actor_name, role, description, ref)
          VALUES (?, ?, ?, ?, ?)',
         [
             $user['id']   ?? null,

@@ -1,13 +1,15 @@
 <?php
 /**
  * SIPEDO - Staff Model (MySQL/PDO)
+ * Disesuaikan dengan schema: staff_profiles.jabatan (bukan job_role),
+ * staff_profiles.status untuk aktif/nonaktif (bukan users.status).
  */
 class StaffModel {
 
     public static function all(): array {
         return DB::fetchAll(
-            'SELECT u.id, u.name, u.email, u.status,
-                    sp.kode, sp.job_role AS role, sp.joined_at AS since
+            'SELECT u.id, u.name, u.email, u.initials, u.color, u.photo,
+                    sp.kode, sp.jabatan, sp.joined_at, sp.status
              FROM users u
              JOIN staff_profiles sp ON sp.user_id = u.id
              ORDER BY sp.joined_at DESC'
@@ -16,7 +18,7 @@ class StaffModel {
 
     public static function findById(int $id): ?array {
         return DB::fetchOne(
-            'SELECT u.*, sp.kode, sp.job_role AS role, sp.joined_at AS since
+            'SELECT u.*, sp.kode, sp.jabatan, sp.joined_at, sp.status AS staff_status
              FROM users u
              JOIN staff_profiles sp ON sp.user_id = u.id
              WHERE u.id = ? LIMIT 1',
@@ -28,7 +30,6 @@ class StaffModel {
      * Buat user dengan role 'staff' + buat staff_profile.
      */
     public static function create(string $name, string $email): int {
-        // Cek apakah email sudah ada
         $existing = UserModel::findByEmail($email);
         if ($existing) return (int)$existing['id'];
 
@@ -38,25 +39,27 @@ class StaffModel {
         $kode  = 'STF-' . str_pad((string)($count + 1), 2, '0', STR_PAD_LEFT);
 
         DB::run(
-            "INSERT INTO staff_profiles (user_id, kode, job_role, joined_at)
-             VALUES (?, ?, 'Staff Verifikasi', CURDATE())",
+            "INSERT INTO staff_profiles (user_id, kode, jabatan, joined_at, status)
+             VALUES (?, ?, 'Staff Verifikasi', CURDATE(), 'active')",
             [$userId, $kode]
         );
         return $userId;
     }
 
+    /**
+     * Ubah status aktif/nonaktif staff via staff_profiles.status
+     */
     public static function setStatus(int $userId, string $status): ?string {
         $user = UserModel::findById($userId);
         if (!$user) return null;
-        UserModel::setStatus($userId, $status);
+        DB::run('UPDATE staff_profiles SET status=? WHERE user_id=?', [$status, $userId]);
         return $user['name'];
     }
 
     public static function delete(int $userId): ?string {
         $user = UserModel::findById($userId);
         if (!$user) return null;
-        // Hapus staff_profile dulu (CASCADE sudah handle, tapi eksplisit lebih aman)
-        DB::run('DELETE FROM staff_profiles WHERE user_id = ?', [$userId]);
+        // staff_profiles akan terhapus via ON DELETE CASCADE
         DB::run('DELETE FROM users WHERE id = ?', [$userId]);
         return $user['name'];
     }

@@ -1,6 +1,7 @@
 <?php
 /**
  * SIPEDO - User Model (MySQL/PDO)
+ * Disesuaikan dengan schema: users tidak punya kolom 'status'
  */
 class UserModel {
 
@@ -20,7 +21,6 @@ class UserModel {
         $user = self::findByEmail($email);
         if (!$user) return null;
         if ($user['role'] !== $role) return null;
-        if ($user['status'] !== 'active') return null;
         if (!password_verify($password, $user['password'])) return null;
         return $user;
     }
@@ -36,8 +36,8 @@ class UserModel {
         $color    = match($role) { 'admin' => '#2563eb', 'staff' => '#d97706', default => '#059669' };
 
         DB::run(
-            "INSERT INTO users (name, email, password, role, initials, color, photo, status)
-             VALUES (?, ?, ?, ?, ?, ?, '', 'active')",
+            "INSERT INTO users (name, email, password, role, initials, color, photo)
+             VALUES (?, ?, ?, ?, ?, ?, '')",
             [$name, $email, password_hash($password, PASSWORD_DEFAULT), $role, $initials, $color]
         );
         return (int) DB::lastInsertId();
@@ -62,9 +62,5 @@ class UserModel {
 
     public static function changePassword(int $userId, string $newPassword): void {
         DB::run('UPDATE users SET password=? WHERE id=?', [password_hash($newPassword, PASSWORD_DEFAULT), $userId]);
-    }
-
-    public static function setStatus(int $userId, string $status): void {
-        DB::run('UPDATE users SET status=? WHERE id=?', [$status, $userId]);
     }
 }

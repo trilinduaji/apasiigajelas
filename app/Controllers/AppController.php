@@ -2,6 +2,7 @@
 /**
  * SIPEDO - App Controller
  * Handles the main authenticated app shell + page routing
+ * Data diambil dari database dan di-inject sebagai variabel ke view.
  */
 class AppController {
     private array $menus = [
@@ -74,7 +75,7 @@ class AppController {
         $titles      = $this->titles;
 
         // Page-specific CSS
-        $pageCss = App::basePath() . '/public/assets/css/' . basename($page) . '.css';
+        $pageCss    = App::basePath() . '/public/assets/css/' . basename($page) . '.css';
         $hasPageCss = file_exists($pageCss);
 
         // Include the page partial
@@ -84,13 +85,28 @@ class AppController {
             $page = $defaultPage;
         }
 
+        // ── Preload data dari database ──────────────────────────────
+        $donations = DonationModel::all();
+        $programs  = ProgramModel::all();
+        $staffList = StaffModel::all();
+        $logs      = DB::fetchAll(
+            'SELECT id, user_id, actor_name, role, description, ref, created_at
+             FROM activity_logs
+             ORDER BY created_at DESC
+             LIMIT 200'
+        );
+        $settings  = DB::fetchAll('SELECT `key`, `value`, `description` FROM settings');
+        $settingsMap = array_column($settings, 'value', 'key');
+        $allUsers  = UserModel::all();
+        // ──────────────────────────────────────────────────────────────
+
         View::render('shared/layout', compact(
-            'role', 'page', 'user', 'menus', 'titles', 'hasPageCss', 'pageFile', 'defaultPage'
+            'role', 'page', 'user', 'menus', 'titles', 'hasPageCss', 'pageFile', 'defaultPage',
+            'donations', 'programs', 'staffList', 'logs', 'settingsMap', 'allUsers'
         ));
     }
 
     private function resolveViewDir(string $role, string $page): string {
-        // Route page names to view directories
         $adminPages  = ['dash-admin','pengguna','program-admin','rekap-donasi','log','laporan','pengaturan','profil-admin'];
         $staffPages  = ['dash-staff','verifikasi','program-staff','tambah-program','edit-program','progress-staff','riwayat-staff','profil-staff'];
         $donaturPages= ['dash-donatur','program-donatur','program-detail','riwayat-donasi','profil-donatur'];
@@ -99,7 +115,6 @@ class AppController {
         if (in_array($page, $staffPages,   true)) return 'staff';
         if (in_array($page, $donaturPages, true)) return 'donatur';
 
-        // Fallback by role
         return match($role) {
             'admin'  => 'admin',
             'staff'  => 'staff',
@@ -107,4 +122,3 @@ class AppController {
         };
     }
 }
-
